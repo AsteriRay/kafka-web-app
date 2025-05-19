@@ -1,0 +1,15 @@
+replicaCount: 1
+
+image:
+  repository: asterisstamatis/kafka-consumer
+  tag: "0.8.0"
+  pullPolicy: IfNotPresent
+
+kafka:
+  brokers:
+    - kafka-controller-0.kafka-controller-headless.kafka:9092
+    - kafka-controller-1.kafka-controller-headless.kafka:9092
+    - kafka-controller-2.kafka-controller-headless.kafka:9092
+  clientId: kafka-app
+  groupId: purchases-group
+  topic: purchases

@@ -1,0 +1,68 @@
+networks:
+  kafka-network:
+    driver: bridge
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    networks:
+      - kafka-network
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka
+    networks:
+      - kafka-network
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      
+  kafka-init:
+    image: confluentinc/cp-kafka:latest
+    networks:
+      - kafka-network
+    command: [ "/bin/bash", "-c", "/create_topic.sh"]
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      TOPIC_NAME: purchases
+    depends_on:
+      kafka:
+        condition: service_started
+    volumes:
+      - type: bind
+        source: ./scripts/create_topic.sh
+        target: /create_topic.sh
+    init: true
+
+  kafka-consumer:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    container_name: kafka-consumer
+    restart: unless-stopped
+    environment:
+      KAFKA_CLIENT_ID: "kafka-app"
+      KAFKA_BROKERS: "kafka:9092"
+      KAFKA_TOPIC: "purchases"
+      KAFKA_GROUP_ID: "purchases-group"
+    depends_on:
+      kafka:
+        condition: service_started
+    networks:
+      - kafka-network
+    command: ["/app/scripts/wait-for-kafka.sh", "--", "node", "./src/app.js"]

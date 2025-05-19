@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "{{ .Release.Name }}-deployment"
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: kafka-consumer
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: KAFKA_BROKERS
+              value: "{{ join "," .Values.kafka.brokers }}"
+            - name: KAFKA_CLIENT_ID
+              value: "{{ .Values.kafka.clientId }}"
+            - name: KAFKA_GROUP_ID
+              value: "{{ .Values.kafka.groupId }}"
+            - name: KAFKA_TOPIC
+              value: "{{ .Values.kafka.topic }}"

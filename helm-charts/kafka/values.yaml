@@ -61,8 +61,63 @@ commonLabels: {}
 commonAnnotations: {}
 ## @param extraDeploy Array of extra objects to deploy with the release
 ##
-extraDeploy: []
-## @param usePasswordFiles Mount credentials as files instead of using environment variables
+extraDeploy:
+  - |
+    apiVersion: batch/v1
+    kind: Job
+    metadata:
+      name: kafka-init-job
+      namespace: kafka
+    spec:
+      backoffLimit: 3
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: kafka-init
+              image: docker.io/bitnami/kafka:4.0.0-debian-12-r3
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  TOPIC_NAME="purchases"
+                  NUM_MESSAGES=10
+                  NUM_USERS=10
+                  PRODUCTS=("apple" "banana" "carrot" "detergent" "eggs" "flour" "grapes" "honey" "icecream" "juice")
+
+                  echo "Waiting for Kafka to be ready..."
+                  for i in {1..30}; do
+                    if /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka.kafka.svc.cluster.local:9092 --list >/dev/null 2>&1; then
+                      echo "Kafka is ready!"
+                      break
+                    else
+                      echo "Kafka not ready, retrying in 5s..."
+                      sleep 5
+                    fi
+                  done
+
+                  echo "Creating topic 'purchases'..."
+                  kafka-topics.sh --create \
+                    --if-not-exists \
+                    --bootstrap-server kafka.kafka.svc.cluster.local:9092 \
+                    --replication-factor 1 \
+                    --partitions 3 \
+                    --topic purchases
+
+                  echo "Producing $NUM_MESSAGES random messages to Kafka topic: $TOPIC_NAME"
+
+                  for i in $(seq 1 $NUM_MESSAGES); do
+                    user_id=$((RANDOM % NUM_USERS + 1))
+                    product=${PRODUCTS[$RANDOM % ${#PRODUCTS[@]}]}
+                    amount=$((RANDOM % 10 + 1))
+                    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+                    message="$user_id,$product,$amount,$timestamp"
+
+                    echo "$message" | /opt/bitnami/kafka/bin/kafka-console-producer.sh --topic "$TOPIC_NAME" --bootstrap-server kafka.kafka.svc.cluster.local:9092 > /dev/null
+                  done
+
+                  echo "Done: $NUM_MESSAGES messages sent to $TOPIC_NAME"
 ##
 usePasswordFiles: true
 ## Diagnostic mode
@@ -1678,7 +1733,7 @@ service:
       ##
       labels: {}
     ## @param service.headless.ipFamilies IP families for the headless service
-    ## 
+    ##
     ipFamilies: []
     ## @param service.headless.ipFamilyPolicy IP family policy for the headless service
     ##
@@ -2113,7 +2168,7 @@ metrics:
         prometheus.io/path: "/metrics"
       ## @param metrics.jmx.service.ipFamilies IP families for the jmx metrics service
       ##
-      ipFamilies: [] 
+      ipFamilies: []
       ## @param metrics.jmx.service.ipFamilyPolicy IP family policy for the jmx metrics service
       ##
       ipFamilyPolicy: ""
